@@ -13,8 +13,10 @@ pipeline {
         }
         stage('Image Build') {
             steps {
+                echo "Copying files to Minikube for build..."
+                sh "minikube cp /var/lib/jenkins/.jenkins/workspace/fleetman-deployment minikube:/tmp/build"
                 echo "BUILDING docker image..........."
-                sh "minikube ssh 'docker build -t fleetman-webapp:${commit_id} ./'"
+                sh "export MINIKUBE_HOME=/var/lib/jenkins/.minikube && minikube ssh 'cd /tmp/build && docker build -t fleetman-webapp:${commit_id} .'"
                 echo 'build complete'
                 // Skip Docker Hub push due to DNS issues
             }
