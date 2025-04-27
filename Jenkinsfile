@@ -1,20 +1,12 @@
 pipeline {
     agent any
-
     stages {
-        stage('Build') {
+        stage('Deploy to Minikube') {
             steps {
-                echo 'Building...'
-            }
-        }
-        stage('Test') {
-            steps {
-                echo 'Testing...'
-            }
-        }
-        stage('Deploy') {
-            steps {
-                echo 'Deploying to Kubernetes...'
+                sh '''
+                kubectl apply -f ~/k8s-fleetman-deploy/replicaset-webapp.yml
+                kubectl apply -f ~/k8s-fleetman-deploy/webapp-service.yml
+                '''
             }
         }
     }
