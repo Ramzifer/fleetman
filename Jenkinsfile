@@ -22,14 +22,15 @@ pipeline {
                 sh "minikube ssh 'cd /tmp && docker build -t fleetman-webapp:${commit_id} .'"
                 
                 echo "Build complete"
-                sh "minikube ssh 'rm -f /tmp/Dockerfile /tmp/index.html'"
+                // Ignore errors during cleanup
+                sh "minikube ssh 'rm -f /tmp/Dockerfile /tmp/index.html' || true"
             }
         }
         stage('Deploy') {
             steps {
                 echo "Deploying to Minikube"
                 // Update the image in the replicaset manifest
-                sh "sed -i -r 's|richardchesterwood/k8s-fleetman-webapp:release2|fleetman-webapp:${commit_id}|' ${WORKSPACE}/replicaset-webapp.yml"
+                sh "sed -i -r 's|richardchesterwood/k8s-fleetman-webapp-angular:release2|fleetman-webapp:${commit_id}|' ${WORKSPACE}/replicaset-webapp.yml"
                 // Apply the manifests
                 sh "kubectl apply -f ${WORKSPACE}/replicaset-webapp.yml"
                 sh "kubectl apply -f ${WORKSPACE}/webapp-service.yml"
