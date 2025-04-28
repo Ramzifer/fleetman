@@ -14,27 +14,27 @@ pipeline {
         }
         stage('Image Build') {
             steps {
-                echo "Creating tarball of build files..."
-                sh "cd /var/lib/jenkins/.jenkins/workspace/fleetman-deployment && tar -czf build-files.tar.gz Dockerfile index.html"
-                echo "Copying tarball to Minikube..."
-                sh "minikube cp /var/lib/jenkins/.jenkins/workspace/fleetman-deployment/build-files.tar.gz minikube:/tmp/build-files.tar.gz"
-                echo "Extracting tarball in Minikube..."
-                sh "export MINIKUBE_HOME=/var/lib/jenkins/.minikube && minikube ssh 'tar -xzf /tmp/build-files.tar.gz -C /tmp'"
-                echo "BUILDING docker image with tag fleetman-webapp:${commit_id}..."
-                sh "export MINIKUBE_HOME=/var/lib/jenkins/.minikube && minikube ssh \"cd /tmp && docker build -t fleetman-webapp:${commit_id} .\""
-                echo 'build complete'
-                sh "export MINIKUBE_HOME=/var/lib/jenkins/.minikube && minikube ssh 'rm -f /tmp/build-files.tar.gz /tmp/Dockerfile /tmp/index.html'"
-                // Skip Docker Hub push due to DNS issues
+                echo "Copying Dockerfile and index.html to Minikube..."
+                sh "minikube cp ${WORKSPACE}/Dockerfile minikube:/tmp/Dockerfile"
+                sh "minikube cp ${WORKSPACE}/index.html minikube:/tmp/index.html"
+                
+                echo "Building Docker image with tag fleetman-webapp:${commit_id}..."
+                sh "minikube ssh 'cd /tmp && docker build -t fleetman-webapp:${commit_id} .'"
+                
+                echo "Build complete"
+                sh "minikube ssh 'rm -f /tmp/Dockerfile /tmp/index.html'"
             }
         }
         stage('Deploy') {
             steps {
-                echo 'Deploying to Minikube'
-                sh "sed -i -r 's|richardchesterwood/k8s-fleetman-webapp:release2|fleetman-webapp:${commit_id}|' /var/lib/jenkins/k8s-fleetman-deploy/replicaset-webapp.yml"
-                sh 'kubectl apply -f /var/lib/jenkins/k8s-fleetman-deploy/replicaset-webapp.yml'
-                sh 'kubectl apply -f /var/lib/jenkins/k8s-fleetman-deploy/webapp-service.yml'
-                sh 'kubectl get all'
-                echo 'deployment complete'
+                echo "Deploying to Minikube"
+                // Update the image in the replicaset manifest
+                sh "sed -i -r 's|richardchesterwood/k8s-fleetman-webapp:release2|fleetman-webapp:${commit_id}|' ${WORKSPACE}/replicaset-webapp.yml"
+                // Apply the manifests
+                sh "kubectl apply -f ${WORKSPACE}/replicaset-webapp.yml"
+                sh "kubectl apply -f ${WORKSPACE}/webapp-service.yml"
+                sh "kubectl get all"
+                echo "Deployment complete"
             }
         }
     }
