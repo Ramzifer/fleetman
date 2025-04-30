@@ -1,84 +1,64 @@
-def commit_id
 pipeline {
     agent any
+    environment {
+        COMMIT_ID = "${GIT_COMMIT.take(7)}"
+    }
     stages {
         stage('Preparation') {
             steps {
-                checkout scm
-                sh "git rev-parse --short HEAD > .git/commit-id"
-                script {
-                    commit_id = readFile('.git/commit-id').trim()
-                }
-                echo "Commit ID: ${commit_id}"
-                // Clone position-tracker if not present
-                sh """
-                if [ ! -d "position-tracker" ]; then
-                    git clone https://github.com/DickChesterwood/fleetman-position-tracker.git position-tracker
-                fi
-                """
+                git 'https://github.com/Ramzifer/fleetman.git'
+                sh 'git clone https://github.com/Ramzifer/fleetman-position-tracker.git position-tracker'
             }
         }
         stage('Build Position Tracker') {
             steps {
                 dir('position-tracker') {
-                    sh "mvn clean package -DskipTests"
+                    sh 'mvn clean package -DskipTests'
                 }
             }
         }
         stage('SonarQube Analysis') {
             steps {
                 dir('position-tracker') {
-                    withSonarQubeEnv('SonarQube') {
-                        sh """
-                        sonar-scanner \
-                          -Dsonar.projectKey=fleetman-position-tracker \
-                          -Dsonar.projectName='Fleetman Position Tracker' \
-                          -Dsonar.sources=src/main/java \
-                          -Dsonar.java.binaries=target/classes
-                        """
-                    }
+                    sh 'sonar-scanner -Dsonar.projectKey=fleetman-position-tracker -Dsonar.host.url=http://localhost:9000 -Dsonar.login=admin -Dsonar.password=admin'
                 }
             }
         }
         stage('SonarQube Quality Gate') {
             steps {
-                timeout(time: 2, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                dir('position-tracker') {
+                    sh 'sleep 10'
+                    sh 'curl -u admin:admin http://localhost:9000/api/qualitygates/project_status?projectKey=fleetman-position-tracker > status.json'
+                    sh 'cat status.json'
+                    sh 'if grep -q \'"status":"ERROR"\' status.json; then exit 1; fi'
                 }
             }
         }
         stage('Image Build for Webapp') {
             steps {
-                echo "Copying Dockerfile and index.html to Minikube..."
-                sh "minikube cp ${WORKSPACE}/Dockerfile minikube:/tmp/Dockerfile"
-                sh "minikube cp ${WORKSPACE}/index.html minikube:/tmp/index.html"
-                
-                echo "Building Docker image with tag fleetman-webapp:${commit_id}..."
-                sh "minikube ssh 'cd /tmp && docker build -t fleetman-webapp:${commit_id} .'"
-                
-                echo "Build complete"
-                // Ignore errors during cleanup
-                sh "minikube ssh 'rm -f /tmp/Dockerfile /tmp/index.html' || true"
+                dir('webapp') {
+                    sh "minikube cp ${WORKSPACE}/webapp /tmp/webapp"
+                    sh "minikube ssh 'sudo mkdir -p /tmp/webapp/src/main && sudo chmod -R 777 /tmp/webapp'"
+                    sh "minikube cp ${WORKSPACE}/webapp/src/main/webapp /tmp/webapp/src/main/webapp"
+                    sh "minikube ssh 'cd /tmp/webapp && sudo docker build -t fleetman-webapp:${COMMIT_ID} .'"
+                }
             }
         }
         stage('Deploy Position Tracker') {
             steps {
-                echo "Deploying Position Tracker to Minikube"
-                sh "kubectl apply -f ${WORKSPACE}/../position-tracker-deployment.yml"
-                sh "kubectl apply -f ${WORKSPACE}/../position-tracker-service.yml"
-                sh "kubectl delete pod -l app=position-tracker || true"
+                dir('position-tracker/k8s') {
+                    sh 'kubectl apply -f deployment.yml'
+                    sh 'kubectl apply -f service.yml'
+                }
             }
         }
         stage('Deploy Webapp') {
             steps {
-                echo "Deploying Webapp to Minikube"
-                // Update the image in the replicaset manifest
-                sh "sed -i -r 's|richardchesterwood/k8s-fleetman-webapp-angular:release2|fleetman-webapp:${commit_id}|' ${WORKSPACE}/replicaset-webapp.yml"
-                // Apply the manifests
-                sh "kubectl apply -f ${WORKSPACE}/replicaset-webapp.yml"
-                sh "kubectl apply -f ${WORKSPACE}/webapp-service.yml"
-                sh "kubectl get all"
-                echo "Deployment complete"
+                dir('webapp/k8s') {
+                    sh "sed -i 's/fleetman-webapp:.*/fleetman-webapp:${COMMIT_ID}/' deployment.yml"
+                    sh 'kubectl apply -f deployment.yml'
+                    sh 'kubectl apply -f service.yml'
+                }
             }
         }
     }
