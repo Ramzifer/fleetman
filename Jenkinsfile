@@ -6,7 +6,7 @@ pipeline {
     stages {
         stage('Preparation') {
             steps {
-                git 'https://github.com/Ramzifer/fleetman.git'
+                git branch: 'main', url: 'https://github.com/Ramzifer/fleetman.git'
                 sh 'git clone https://github.com/Ramzifer/fleetman-position-tracker.git position-tracker'
             }
         }
