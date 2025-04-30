@@ -36,12 +36,11 @@ pipeline {
         }
         stage('Image Build for Webapp') {
             steps {
-                dir('webapp') {
-                    sh "minikube cp ${WORKSPACE}/webapp /tmp/webapp"
-                    sh "minikube ssh 'sudo mkdir -p /tmp/webapp/src/main && sudo chmod -R 777 /tmp/webapp'"
-                    sh "minikube cp ${WORKSPACE}/webapp/src/main/webapp /tmp/webapp/src/main/webapp"
-                    sh "minikube ssh 'cd /tmp/webapp && sudo docker build -t fleetman-webapp:${COMMIT_ID} .'"
-                }
+                sh "minikube cp ${WORKSPACE} /tmp/webapp"
+                sh "minikube ssh 'sudo mkdir -p /tmp/webapp && sudo chmod -R 777 /tmp/webapp'"
+                sh "minikube cp ${WORKSPACE}/index.html /tmp/webapp/index.html"
+                sh "minikube cp ${WORKSPACE}/Dockerfile /tmp/webapp/Dockerfile"
+                sh "minikube ssh 'cd /tmp/webapp && sudo docker build -t fleetman-webapp:${COMMIT_ID} .'"
             }
         }
         stage('Deploy Position Tracker') {
@@ -54,11 +53,9 @@ pipeline {
         }
         stage('Deploy Webapp') {
             steps {
-                dir('webapp/k8s') {
-                    sh "sed -i 's/fleetman-webapp:.*/fleetman-webapp:${COMMIT_ID}/' deployment.yml"
-                    sh 'kubectl apply -f deployment.yml'
-                    sh 'kubectl apply -f service.yml'
-                }
+                sh "sed -i 's/fleetman-webapp:.*/fleetman-webapp:${COMMIT_ID}/' replicaset-webapp.yml"
+                sh 'kubectl apply -f replicaset-webapp.yml'
+                sh 'kubectl apply -f webapp-service.yml'
             }
         }
     }
