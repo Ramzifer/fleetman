@@ -20,7 +20,9 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 dir('position-tracker') {
-                    sh 'sonar-scanner -Dsonar.projectKey=fleetman-position-tracker -Dsonar.host.url=http://localhost:9000 -Dsonar.login=admin -Dsonar.password=admin'
+                    withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
+                        sh 'mvn sonar:sonar -Dsonar.projectKey=fleetman-position-tracker -Dsonar.host.url=http://localhost:9000 -Dsonar.login=$SONAR_TOKEN'
+                    }
                 }
             }
         }
@@ -28,7 +30,9 @@ pipeline {
             steps {
                 dir('position-tracker') {
                     sh 'sleep 10'
-                    sh 'curl -u admin:admin http://localhost:9000/api/qualitygates/project_status?projectKey=fleetman-position-tracker > status.json'
+                    withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
+                        sh "curl -H 'Authorization: Bearer $SONAR_TOKEN' http://localhost:9000/api/qualitygates/project_status?projectKey=fleetman-position-tracker > status.json"
+                    }
                     sh 'cat status.json'
                     sh 'if grep -q \'"status":"ERROR"\' status.json; then exit 1; fi'
                 }
@@ -36,11 +40,11 @@ pipeline {
         }
         stage('Image Build for Webapp') {
             steps {
-                sh "minikube cp ${WORKSPACE} /tmp/webapp"
-                sh "minikube ssh 'sudo mkdir -p /tmp/webapp && sudo chmod -R 777 /tmp/webapp'"
-                sh "minikube cp ${WORKSPACE}/index.html /tmp/webapp/index.html"
-                sh "minikube cp ${WORKSPACE}/Dockerfile /tmp/webapp/Dockerfile"
-                sh "minikube ssh 'cd /tmp/webapp && sudo docker build -t fleetman-webapp:${COMMIT_ID} .'"
+                dir('fleetman') {
+                    sh 'eval $(minikube docker-env)'
+                    sh "docker build -t fleetman-webapp:${COMMIT_ID} ."
+                    sh 'eval $(minikube docker-env --unset)'
+                }
             }
         }
         stage('Deploy Position Tracker') {
