@@ -7,7 +7,6 @@ pipeline {
         stage('Preparation') {
             steps {
                 git branch: 'main', url: 'https://github.com/Ramzifer/fleetman.git'
-                // Remove existing position-tracker directory if it exists
                 sh '''
                     if [ -d "position-tracker" ]; then
                         rm -rf position-tracker
@@ -46,11 +45,9 @@ pipeline {
         }
         stage('Image Build for Webapp') {
             steps {
-                dir('fleetman') {
-                    sh 'eval $(minikube docker-env)'
-                    sh "docker build -t fleetman-webapp:${COMMIT_ID} ."
-                    sh 'eval $(minikube docker-env --unset)'
-                }
+                sh 'eval $(minikube docker-env)'
+                sh "docker build -t fleetman-webapp:${COMMIT_ID} ."
+                sh 'eval $(minikube docker-env --unset)'
             }
         }
         stage('Deploy Position Tracker') {
