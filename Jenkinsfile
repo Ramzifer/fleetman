@@ -7,7 +7,13 @@ pipeline {
         stage('Preparation') {
             steps {
                 git branch: 'main', url: 'https://github.com/Ramzifer/fleetman.git'
-                sh 'git clone https://github.com/Ramzifer/fleetman-position-tracker.git position-tracker'
+                // Remove existing position-tracker directory if it exists
+                sh '''
+                    if [ -d "position-tracker" ]; then
+                        rm -rf position-tracker
+                    fi
+                    git clone https://github.com/Ramzifer/fleetman-position-tracker.git position-tracker
+                '''
             }
         }
         stage('Build Position Tracker') {
